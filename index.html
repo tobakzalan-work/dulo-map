@@ -1,557 +1,1215 @@
-:Interaktív Dűlőtérkép:index.html
 <!DOCTYPE html>
 <html lang="hu">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Magyarországi Borvidékek és Dűlők</title>
+    <title>Magyarországi Borvidékek és Dűlők - Geostatisztikai Riport</title>
     
-    <!-- Tailwind CSS v4 CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- Leaflet CSS és JS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     
-    <!-- Proj4js a koordináta transzformációhoz (EOV -> WGS84) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.11.0/proj4.js"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <!-- Font Awesome ikonok -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        wine: {
+                            50: '#fdf2f4',
+                            100: '#fbe5e9',
+                            200: '#f7ccd5',
+                            300: '#f1a3b3',
+                            400: '#e56f89',
+                            500: '#d44365',
+                            600: '#be294e',
+                            700: '#9f1d3e',
+                            800: '#841b37',
+                            900: '#701a31',
+                            950: '#2c040d',
+                        },
+                        slate: {
+                            850: '#1e293b',
+                            950: '#0f172a',
+                        }
+                    },
+                    fontFamily: {
+                        serif: ['Playfair Display', 'Georgia', 'serif'],
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
     <style>
-        /* Egyedi Leaflet stílusok a prémium megjelenésért */
-        .leaflet-container {
-            font-family: inherit;
-        }
-        .custom-popup .leaflet-popup-content-wrapper {
-            background: #ffffff;
-            color: #1e293b;
-            border-radius: 12px;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            padding: 4px;
-        }
-        .custom-popup .leaflet-popup-tip {
-            background: #ffffff;
-        }
-        /* Egyedi görgetősáv a listáknak */
-        ::-webkit-scrollbar {
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght=300;400;500;600;700&family=Playfair+Display:ital,wght=0,400;0,600;0,700;1,400&display=swap');
+        
+        .custom-scrollbar::-webkit-scrollbar {
             width: 6px;
+            height: 6px;
         }
-        ::-webkit-scrollbar-track {
-            background: transparent;
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #0f172a;
         }
-        ::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #be294e;
             border-radius: 3px;
         }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
+        
+        html, body {
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            background-color: #0f172a;
+        }
+
+        /* Leaflet popup dark theme customization */
+        .leaflet-popup-content-wrapper {
+            background: #1e293b !important;
+            color: #f1f5f9 !important;
+            border: 1px solid #475569;
+        }
+        .leaflet-popup-tip {
+            background: #1e293b !important;
+        }
+
+        /* Testreszabott dűlő feliratok (Labels) a térképen */
+        .dulo-label {
+            background: rgba(15, 23, 42, 0.9) !important;
+            border: 1.5px solid #be294e !important;
+            color: #fbbf24 !important; /* borostyán felirat */
+            font-weight: 700 !important;
+            font-family: 'Inter', sans-serif !important;
+            font-size: 10px !important;
+            padding: 2px 6px !important;
+            border-radius: 4px !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5) !important;
+            pointer-events: none !important;
+        }
+
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            body {
+                background-color: white !important;
+                color: black !important;
+                overflow: auto !important;
+                height: auto !important;
+            }
+            main {
+                display: block !important;
+                height: auto !important;
+                overflow: visible !important;
+            }
+            #dulo-map {
+                height: 380px !important;
+                width: 100% !important;
+                border: 1px solid #ddd !important;
+                page-break-inside: avoid !important;
+            }
+            #right-panel {
+                width: 100% !important;
+                height: auto !important;
+                overflow: visible !important;
+                display: block !important;
+            }
         }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-100 font-sans antialiased h-screen flex flex-col overflow-hidden">
+<body class="text-gray-100 font-sans flex flex-col h-screen overflow-hidden bg-slate-950">
 
-    <!-- Alkalmazás Fejléc -->
-    <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between shrink-0 shadow-lg z-20">
+    <!-- Header -->
+    <header class="bg-slate-900 border-b border-slate-800 text-white py-4 px-6 shadow-xl shrink-0 flex justify-between items-center no-print">
         <div class="flex items-center gap-3">
-            <div class="bg-amber-600 text-white p-2.5 rounded-xl shadow-md shadow-amber-900/20">
-                <i class="fa-solid fa-wine-glass-asterisk text-xl"></i>
+            <div class="p-2 bg-wine-900/50 rounded-lg shadow-inner border border-wine-800/40">
+                <i class="fa-solid fa-map-location-dot text-2xl text-wine-200"></i>
             </div>
             <div>
-                <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
-                    Interaktív Dűlőtérkép <span class="text-xs bg-amber-500/10 text-amber-400 font-medium px-2 py-0.5 rounded-full border border-amber-500/20">v1.1</span>
-                </h1>
-                <p class="text-xs text-slate-400">Automatikus adatbetöltés és valós idejű EOV transzformáció</p>
+                <h1 class="font-serif text-xl md:text-2xl font-bold tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-wine-100 to-amber-200">Dűlőtérkép & Terroir Geostatisztika</h1>
+                <p class="text-wine-300 text-[11px] font-semibold tracking-wide uppercase">Magyarország összes borvidéki dűlőjének (core area) precíziós elemzője</p>
             </div>
         </div>
-        
-        <!-- Fájl státusz és beállított fájlnév jelző -->
-        <div class="flex items-center gap-2 bg-slate-950 border border-slate-800 text-xs px-3 py-1.5 rounded-lg text-slate-300">
-            <i class="fa-solid fa-file-code text-amber-500"></i>
-            <span>Forrásfájl:</span>
-            <span id="file-path-display" class="font-mono text-amber-400 font-bold">dulo_all.txt</span>
+        <div class="flex items-center gap-3">
+            <button onclick="window.print()" class="bg-wine-800 hover:bg-wine-700 border border-wine-600 px-4 py-2 rounded-lg text-xs font-semibold transition flex items-center gap-2 shadow-md">
+                <i class="fa-solid fa-print"></i> PDF / Nyomtatás
+            </button>
         </div>
     </header>
 
-    <!-- Fő elrendezés -->
-    <div class="flex flex-1 overflow-hidden relative">
+    <!-- Main Workspace -->
+    <main class="flex-grow flex flex-col lg:flex-row overflow-hidden w-full max-w-[100vw]">
         
-        <!-- Oldalsáv (Vezérlők, Szűrők és Statisztikák) -->
-        <aside class="w-96 bg-slate-900/95 border-r border-slate-800 flex flex-col shrink-0 z-10 shadow-2xl overflow-y-auto">
+        <!-- LEFT PANEL: Filters and Search Results (Dark) -->
+        <section class="w-full lg:w-1/4 bg-slate-900 border-r border-slate-800 flex flex-col overflow-hidden shrink-0 no-print">
             
-            <div id="controls-container" class="p-6 flex-1 flex flex-col gap-5">
+            <!-- Dynamic Stats Summary (KPIs) -->
+            <div class="p-4 border-b border-slate-800 bg-slate-950/60 grid grid-cols-2 gap-3 shrink-0">
+                <div class="bg-slate-900 border border-slate-800/80 rounded-xl p-3 text-center shadow-md">
+                    <span class="text-[9px] uppercase tracking-wider text-gray-400 font-bold block mb-1">Szűrt Dűlők</span>
+                    <p id="kpi-count" class="text-lg font-extrabold text-amber-400">0 db</p>
+                </div>
+                <div class="bg-slate-900 border border-slate-800/80 rounded-xl p-3 text-center shadow-md">
+                    <span class="text-[9px] uppercase tracking-wider text-gray-400 font-bold block mb-1">Összterület</span>
+                    <p id="kpi-area" class="text-lg font-extrabold text-wine-400">0 ha</p>
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="p-4 space-y-4 border-b border-slate-800 bg-slate-900/40">
+                <h3 class="font-serif font-bold text-amber-200 text-sm flex items-center gap-2">
+                    <i class="fa-solid fa-filter"></i> Szűrők & Keresés
+                </h3>
                 
-                <!-- Statisztika kártyák -->
-                <div class="grid grid-cols-2 gap-3">
-                    <div class="bg-slate-950/50 border border-slate-800/80 rounded-xl p-3.5">
-                        <div class="text-slate-400 text-xs font-medium mb-1">Dűlők száma</div>
-                        <div id="stat-count" class="text-2xl font-bold text-amber-500">-</div>
-                    </div>
-                    <div class="bg-slate-950/50 border border-slate-800/80 rounded-xl p-3.5">
-                        <div class="text-slate-400 text-xs font-medium mb-1">Összes terület</div>
-                        <div id="stat-area" class="text-2xl font-bold text-amber-500">- <span class="text-xs font-normal text-slate-400">ha</span></div>
-                    </div>
+                <!-- Borvidék Dropdown -->
+                <div>
+                    <label class="block text-[9px] uppercase font-bold text-gray-400 tracking-wider mb-1.5">Borvidék választás</label>
+                    <select id="filter-region" class="w-full bg-slate-800 border border-slate-700 text-gray-100 rounded-lg px-3 py-2 text-xs focus:border-wine-500 focus:outline-none w-full cursor-pointer transition">
+                        <option value="ALL">Mindegyik borvidék</option>
+                    </select>
                 </div>
 
-                <!-- Keresés név szerint -->
-                <div class="space-y-1.5">
-                    <label for="search-dulo" class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <i class="fa-solid fa-magnifying-glass text-amber-500"></i> Dűlő keresése
-                    </label>
-                    <input type="text" id="search-dulo" placeholder="Írd be a dűlő nevét..." 
-                           class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent text-white transition placeholder-slate-600">
+                <!-- Település Dropdown -->
+                <div>
+                    <label class="block text-[9px] uppercase font-bold text-gray-400 tracking-wider mb-1.5">Település választás</label>
+                    <select id="filter-town" class="w-full bg-slate-800 border border-slate-700 text-gray-100 rounded-lg px-3 py-2 text-xs focus:border-wine-500 focus:outline-none w-full cursor-pointer transition">
+                        <option value="ALL">Mindegyik település</option>
+                    </select>
                 </div>
 
-                <!-- Borvidék szűrő -->
-                <div class="space-y-1.5">
-                    <label for="filter-borvidek" class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <i class="fa-solid fa-wine-bottle text-amber-500"></i> Borvidék
-                    </label>
-                    <div class="relative">
-                        <select id="filter-borvidek" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent text-white appearance-none cursor-pointer transition">
-                            <option value="">Mindegyik borvidék</option>
-                        </select>
-                        <div class="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none text-slate-500">
-                            <i class="fa-solid fa-chevron-down text-xs"></i>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Település szűrő -->
-                <div class="space-y-1.5">
-                    <label for="filter-telepules" class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <i class="fa-solid fa-map-pin text-amber-500"></i> Település
-                    </label>
-                    <div class="relative">
-                        <select id="filter-telepules" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent text-white appearance-none cursor-pointer transition">
-                            <option value="">Mindegyik település</option>
-                        </select>
-                        <div class="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none text-slate-500">
-                            <i class="fa-solid fa-chevron-down text-xs"></i>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Listázott dűlők gyorsnézete -->
-                <div class="flex-1 flex flex-col min-h-[220px]">
-                    <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
-                        <span>Találatok listája</span>
-                        <span id="filtered-count-badge" class="bg-slate-800 px-2 py-0.5 rounded text-slate-300 font-mono text-[10px]">0 db</span>
-                    </div>
-                    <div id="dulo-list" class="flex-1 bg-slate-950/60 border border-slate-850 rounded-xl overflow-y-auto p-1 divide-y divide-slate-900/50">
-                        <!-- Ide kerülnek a szűrt dűlők gombjai -->
-                    </div>
-                </div>
-
-            </div>
-        </aside>
-
-        <!-- Térkép konténer -->
-        <main class="flex-1 relative bg-slate-950">
-            <!-- Loading folyamatjelző -->
-            <div id="loading-overlay" class="absolute inset-0 bg-slate-950/90 z-50 flex flex-col items-center justify-center gap-4 transition-opacity duration-300">
-                <div class="relative flex items-center justify-center">
-                    <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-amber-500"></div>
-                    <i class="fa-solid fa-wine-bottle text-amber-500 absolute text-xl"></i>
-                </div>
-                <div class="text-center">
-                    <h3 class="font-bold text-white text-base">Adatok betöltése folyamatban...</h3>
-                    <p id="loading-subtext" class="text-xs text-slate-400 mt-1">Kapcsolódás a dulo_all.txt fájlhoz</p>
-                    <div class="w-48 bg-slate-800 h-1 rounded-full mt-3 mx-auto overflow-hidden">
-                        <div class="bg-amber-500 h-full animate-pulse w-full"></div>
-                    </div>
+                <!-- Dűlőnév Keresés / Választás -->
+                <div>
+                    <label class="block text-[9px] uppercase font-bold text-gray-400 tracking-wider mb-1.5">Dűlő választás</label>
+                    <select id="filter-name" class="w-full bg-slate-800 border border-slate-700 text-gray-100 rounded-lg px-3 py-2 text-xs focus:border-wine-500 focus:outline-none w-full cursor-pointer transition">
+                        <option value="ALL">Keresés a listából...</option>
+                    </select>
                 </div>
             </div>
 
-            <div id="map" class="w-full h-full"></div>
-        </main>
-    </div>
+            <!-- Dynamic Results List -->
+            <div class="flex-grow flex flex-col overflow-hidden bg-slate-950/20">
+                <div class="px-4 py-2 bg-slate-950/80 border-b border-slate-800 flex justify-between items-center shrink-0">
+                    <span class="text-xs font-semibold text-gray-400">Dűlők listája</span>
+                    <span id="results-count" class="bg-wine-900/80 border border-wine-700/50 text-wine-200 text-[9px] font-bold px-2 py-0.5 rounded-full">0 db</span>
+                </div>
+                <div id="results-list" class="flex-grow overflow-y-auto custom-scrollbar p-2 space-y-1.5">
+                    <!-- Loaded dynamically -->
+                </div>
+            </div>
 
-    <!-- Értesítő sáv (toast) hiba esetére -->
-    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-rose-500 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 z-50 transition-all duration-300 translate-y-24 opacity-0">
-        <i class="fa-solid fa-circle-exclamation text-lg"></i>
-        <span id="toast-message" class="text-sm font-medium">Hiba történt</span>
-    </div>
+        </section>
 
+        <!-- MIDDLE PANEL: Interactive Map (Voyager Elegant style) -->
+        <section class="w-full lg:w-5/12 h-[350px] lg:h-full relative flex flex-col border-r border-slate-800 bg-slate-950">
+            <!-- Custom map controller on top right -->
+            <div class="absolute top-3 right-3 z-[1000] bg-slate-900/90 backdrop-blur-sm p-1 rounded-lg shadow-md border border-slate-800 flex gap-1 text-[10px] font-bold no-print">
+                <button onclick="setBasemap('voyager')" id="btn-voyager" class="px-2.5 py-1 rounded transition bg-wine-800 text-white border border-wine-700">Voyager</button>
+                <button onclick="setBasemap('satellite')" id="btn-satellite" class="px-2.5 py-1 rounded transition text-gray-400 hover:bg-slate-800">Műhold</button>
+                <button onclick="setBasemap('topo')" id="btn-topo" class="px-2.5 py-1 rounded transition text-gray-400 hover:bg-slate-800">Topo</button>
+            </div>
+            
+            <div id="dulo-map" class="w-full h-full"></div>
+            
+            <!-- Map Loader Overlay -->
+            <div id="map-loader" class="absolute inset-0 bg-slate-950/95 z-[2000] flex flex-col items-center justify-center text-center p-6">
+                <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-wine-500 mb-3"></div>
+                <h4 class="font-serif font-bold text-amber-200">Országos dűlőtérkép betöltése...</h4>
+                <p class="text-xs text-gray-400 mt-1 max-w-xs leading-relaxed">A dulo_all_join_3857.geojson térinformatikai állomány (1543 db dűlő) betöltése és automatikus EPSG:3857 -> WGS84 transzformációja...</p>
+            </div>
+        </section>
+
+        <!-- RIGHT PANEL: Statistics and Charts (Dark Premium) -->
+        <section id="right-panel" class="w-full lg:w-1/3 bg-slate-900 flex flex-col overflow-y-auto custom-scrollbar p-5 space-y-5">
+            
+            <!-- Welcome placeholder when nothing is selected -->
+            <div id="selection-placeholder" class="h-full flex flex-col items-center justify-center text-center py-16">
+                <div class="w-16 h-16 rounded-full bg-slate-800 border border-slate-700 text-wine-400 flex items-center justify-center text-2xl mb-4">
+                    <i class="fa-solid fa-grape"></i>
+                </div>
+                <h3 class="font-serif font-bold text-amber-200 text-lg">Nincs kijelölt dűlő</h3>
+                <p class="text-xs text-gray-400 max-w-xs mt-2 leading-relaxed">
+                    Válasszon a bal oldali szűrt találati listából, vagy kattintson közvetlenül egy dűlőmag poligonra a térképen a precíziós statisztikák betöltéséhez.
+                </p>
+            </div>
+
+            <!-- Detailed content loaded upon selection -->
+            <div id="selection-content" class="hidden space-y-5">
+                
+                <!-- Vineyard Header Info -->
+                <div class="border-b border-slate-800 pb-3">
+                    <span id="rep-region" class="text-[10px] font-bold uppercase tracking-widest text-amber-300 bg-amber-950/60 border border-amber-800/40 px-3 py-1 rounded-full inline-block mb-2"></span>
+                    <h2 id="rep-name" class="font-serif text-xl md:text-2xl font-bold text-gray-100"></h2>
+                    <p class="text-[11px] text-gray-400 mt-1 flex items-center gap-1.5 flex-wrap">
+                        <i class="fa-solid fa-location-dot text-wine-500"></i> Település: <strong id="rep-towns" class="text-gray-200"></strong> 
+                        <span class="text-slate-700">|</span> 
+                        <i class="fa-solid fa-fingerprint text-wine-500"></i> ID: <strong id="rep-ids" class="text-gray-200"></strong>
+                    </p>
+                </div>
+
+                <!-- Magterület (Core) Quick Stats -->
+                <div class="bg-gradient-to-r from-wine-900 to-wine-950 border border-wine-800/40 text-white px-5 py-3.5 rounded-xl flex justify-between items-center shadow-md">
+                    <div>
+                        <span class="text-[8px] uppercase tracking-wider text-wine-300 font-extrabold block">Dűlőmag kiterjedése</span>
+                        <h4 class="text-[11px] text-gray-300">Összesített Core poligon</h4>
+                    </div>
+                    <p class="font-serif text-xl font-bold text-amber-300"><span id="rep-area"></span> <span class="text-xs font-sans font-normal text-gray-300">ha</span></p>
+                </div>
+
+                <!-- Geomorphological Metrics Grid (Dark Mode) -->
+                <div class="grid grid-cols-1 gap-3">
+                    
+                    <!-- Elevation Stats Card -->
+                    <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 flex flex-col justify-between shadow-sm">
+                        <h4 class="text-[9px] font-bold uppercase tracking-wider text-amber-300 mb-3 flex items-center gap-1.5">
+                            <i class="fa-solid fa-mountain text-wine-400"></i> Tengerszint feletti magasság (Core)
+                        </h4>
+                        <div class="grid grid-cols-3 gap-2 text-center">
+                            <div class="bg-slate-900 p-2 rounded-lg border border-slate-800">
+                                <span class="text-[8px] text-gray-400 uppercase font-bold block mb-0.5">Minimális</span>
+                                <p id="stat-min-alt" class="text-xs font-extrabold text-gray-200"></p>
+                            </div>
+                            <div class="bg-slate-900 p-2 rounded-lg border border-slate-800">
+                                <span class="text-[8px] text-gray-400 uppercase font-bold block mb-0.5">Maximális</span>
+                                <p id="stat-max-alt" class="text-xs font-extrabold text-gray-200"></p>
+                            </div>
+                            <div class="bg-slate-900 p-2 rounded-lg border border-slate-800">
+                                <span class="text-[8px] text-gray-400 uppercase font-bold block mb-0.5">Átlagos</span>
+                                <p id="stat-avg-alt" class="text-xs font-extrabold text-amber-400"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Slope Stats Card -->
+                    <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800/80 flex flex-col justify-between shadow-sm">
+                        <h4 class="text-[9px] font-bold uppercase tracking-wider text-orange-400 mb-3 flex items-center gap-1.5">
+                            <i class="fa-solid fa-angle-up text-orange-500"></i> Lejtőszög statisztika (Core)
+                        </h4>
+                        <div class="grid grid-cols-3 gap-2 text-center">
+                            <div class="bg-slate-900 p-2 rounded-lg border border-slate-800">
+                                <span class="text-[8px] text-gray-400 uppercase font-bold block mb-0.5">Minimális</span>
+                                <p id="stat-min-slope" class="text-xs font-extrabold text-gray-200"></p>
+                            </div>
+                            <div class="bg-slate-900 p-2 rounded-lg border border-slate-800">
+                                <span class="text-[8px] text-gray-400 uppercase font-bold block mb-0.5">Maximális</span>
+                                <p id="stat-max-slope" class="text-xs font-extrabold text-gray-200"></p>
+                            </div>
+                            <div class="bg-slate-900 p-2 rounded-lg border border-slate-800">
+                                <span class="text-[8px] text-gray-400 uppercase font-bold block mb-0.5">Átlagos</span>
+                                <p id="stat-avg-slope" class="text-xs font-extrabold text-orange-400"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- 3 Pie Charts -->
+                <div class="space-y-5">
+                    <h4 class="font-serif text-sm font-bold text-gray-200 border-b border-slate-800 pb-2 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-pie text-wine-500"></i> Területi Arányok & Jelkulcsok
+                    </h4>
+
+                    <!-- Chart 1: Elevation Zones -->
+                    <div class="bg-slate-950/40 p-4 rounded-xl border border-slate-800/80">
+                        <h5 class="text-[10px] font-bold text-gray-400 mb-3 text-center uppercase tracking-wider">1. Magassági Zónák (m)</h5>
+                        <div class="w-full max-w-[140px] h-[140px] mx-auto relative mb-4">
+                            <canvas id="chart-elevation"></canvas>
+                        </div>
+                        <div id="legend-elevation" class="space-y-1 border-t border-slate-800 pt-3"></div>
+                    </div>
+
+                    <!-- Chart 2: Slope Classes (Orange Sequential Scale) -->
+                    <div class="bg-slate-950/40 p-4 rounded-xl border border-slate-800/80">
+                        <h5 class="text-[10px] font-bold text-gray-400 mb-3 text-center uppercase tracking-wider">2. Lejtőszög Kategóriák</h5>
+                        <div class="w-full max-w-[140px] h-[140px] mx-auto relative mb-4">
+                            <canvas id="chart-slope"></canvas>
+                        </div>
+                        <div id="legend-slope" class="space-y-1 border-t border-slate-800 pt-3"></div>
+                    </div>
+
+                    <!-- Chart 3: Aspect Classes (Circular Aspect GIS Scale) -->
+                    <div class="bg-slate-950/40 p-4 rounded-xl border border-slate-800/80">
+                        <h5 class="text-[10px] font-bold text-gray-400 mb-3 text-center uppercase tracking-wider">3. Égtáji Kitettség</h5>
+                        <div class="w-full max-w-[140px] h-[140px] mx-auto relative mb-4">
+                            <canvas id="chart-aspect"></canvas>
+                        </div>
+                        <div id="legend-aspect" class="space-y-1 border-t border-slate-800 pt-3"></div>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- JS Logic -->
     <script>
-        // ==========================================
-        //  BEÁLLÍTÁS: Itt adhatod meg a GeoJSON fájl elérési útvonalát!
-        // ==========================================
-        const GEOJSON_FILE_PATH = 'dulo_all.txt'; 
-        // ==========================================
+        let geojsonData = null;
+        let compiledVineyards = [];
+        let filteredVineyards = [];
+        let currentSelectedId = null;
+        let map = null;
+        let duloGeoLayer = null;
+        const chartInstances = {};
 
-        // Kijelzett fájlnév frissítése a fejlécben
-        document.getElementById('file-path-display').textContent = GEOJSON_FILE_PATH;
+        // Custom Premium Basemaps definition (Voyager is now less black, light-creamy)
+        const basemaps = {
+            voyager: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>'
+            }),
+            satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+            }),
+            topo: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Esri, USGS, FAO, NPS, NOAA'
+            })
+        };
+        let activeBasemapKey = 'voyager';
 
-        // --- 1. PROJ4 DEFINÍCIÓK ÉS VETÜLET-TRANSZFORMÁCIÓ ---
-        // EOV (HD72 / EPSG:23700) koordinátarendszer definíciója
-        const EPSG23700 = "+proj=somerc +lat_0=47.1443937222222 +lon_0=19.0485717777778 +k_0=0.99993 +x_0=650000 +y_0=200000 +ellps=GRS67 +towgs84=52.17,-71.82,-14.9,0,0,0,0 +units=m +no_defs +type=crs";
-        const EPSG4326 = "+proj=longlat +datum=WGS84 +no_defs +type=crs";
-
-        // Proj4js regisztráció
-        proj4.defs("EPSG:23700", EPSG23700);
-
-        // Rekurzív koordináta-transzformátor a különböző GeoJSON geometriákhoz (EOV -> WGS84)
-        function transformCoords(coords, type) {
-            if (type === "Point") {
-                return proj4("EPSG:23700", "WGS84", coords);
-            } else if (type === "LineString" || type === "MultiPoint") {
-                return coords.map(pt => proj4("EPSG:23700", "WGS84", pt));
-            } else if (type === "Polygon" || type === "MultiLineString") {
-                return coords.map(ring => ring.map(pt => proj4("EPSG:23700", "WGS84", pt)));
-            } else if (type === "MultiPolygon") {
-                return coords.map(polygon => polygon.map(ring => ring.map(pt => proj4("EPSG:23700", "WGS84", pt))));
-            }
-            return coords;
+        // PROJECTION TRANSFORMATION (EPSG:3857 -> EPSG:4326)
+        function mercatorToWgs84(x, y) {
+            const lng = (x / 20037508.34) * 180;
+            let lat = (y / 20037508.34) * 180;
+            lat = 180 / Math.PI * (2 * Math.atan(Math.exp(lat * Math.PI / 180)) - Math.PI / 2);
+            return [lng, lat]; 
         }
 
-        // --- 2. TÉRKÉP INICIALIZÁLÁSA ---
-        const map = L.map('map', {
-            zoomControl: false,
-            attributionControl: false
-        }).setView([47.152, 19.508], 8);
+        function convertGeometryToWgs84(geometry) {
+            if (!geometry) return null;
+            const type = geometry.type;
+            const coords = geometry.coordinates;
 
-        // Vezérlőgombok elrendezése
-        L.control.zoom({ position: 'bottomright' }).addTo(map);
-        L.control.attribution({ position: 'bottomleft', prefix: false }).addTo(map);
+            function convertCoords(c, depth) {
+                if (depth === 1) {
+                    return mercatorToWgs84(c[0], c[1]);
+                }
+                return c.map(sub => convertCoords(sub, depth - 1));
+            }
 
-        // --- 3. ALAPTÉRKÉP RÉTEGEK ---
-        const dark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" class="text-slate-500">OSM</a> &copy; <a href="https://carto.com/attributions" class="text-slate-500">CARTO</a>'
-        });
+            let depth = 0;
+            if (type === 'Point') depth = 1;
+            else if (type === 'LineString' || type === 'MultiPoint') depth = 2;
+            else if (type === 'Polygon' || type === 'MultiLineString') depth = 3;
+            else if (type === 'MultiPolygon') depth = 4;
 
-        const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" class="text-slate-500">OpenStreetMap</a>'
-        });
+            return {
+                type: type,
+                coordinates: convertCoords(coords, depth)
+            };
+        }
 
-        const topo = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-            attribution: 'Map data &copy; OSM | Style &copy; OpenTopoMap'
-        });
+        // Initialize Map
+        function initMap() {
+            if (map) return;
+            map = L.map('dulo-map', {
+                center: [47.162, 19.503], // Hungary center
+                zoom: 7,
+                zoomControl: false
+            });
+            L.control.zoom({ position: 'bottomleft' }).addTo(map);
+            basemaps[activeBasemapKey].addTo(map);
 
-        const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            attribution: 'Tiles &copy; Esri &mdash; Esri, i-cubed, USDA'
-        });
+            // Add map zoom listener to dynamically toggle tooltips (labels)
+            map.on('zoomend', () => {
+                updateTooltipVisibility();
+            });
+        }
 
-        // Alapértelmezett sötét alaptérkép
-        dark.addTo(map);
+        function setBasemap(key) {
+            if (!map || activeBasemapKey === key) return;
+            map.removeLayer(basemaps[activeBasemapKey]);
+            basemaps[key].addTo(map);
+            
+            document.getElementById(`btn-${activeBasemapKey}`).className = "px-2.5 py-1 rounded transition text-gray-400 hover:bg-slate-800";
+            document.getElementById(`btn-${key}`).className = "px-2.5 py-1 rounded transition bg-wine-800 text-white border border-wine-700";
+            activeBasemapKey = key;
+        }
 
-        // Rétegkapcsoló widget
-        const baseMaps = {
-            "<i class='fa-solid fa-moon mr-1.5'></i> Sötét térkép": dark,
-            "<i class='fa-solid fa-map mr-1.5'></i> OpenStreetMap": osm,
-            "<i class='fa-solid fa-mountain-sun mr-1.5'></i> Domborzati": topo,
-            "<i class='fa-solid fa-earth-europe mr-1.5'></i> Műholdkép": satellite
-        };
-        L.control.layers(baseMaps, null, { position: 'topright', collapsed: true }).addTo(map);
-
-        // --- 4. GLOBÁLIS TÉRKIJELÖLÉSI ÉS REPRÓ ADATOK ---
-        let rawGeojson = null;
-        let duloGeojsonLayer = null;
-        let selectedLayerId = null;
-
-        // --- 5. AUTOMATIKUS BETÖLTÉS INDÍTÁSA ---
+        // RUN ON LOAD
         window.addEventListener('DOMContentLoaded', () => {
-            loadGeojsonData();
+            fetchAndProcessGeoJSON();
         });
 
-        function loadGeojsonData() {
-            const subtext = document.getElementById('loading-subtext');
-            subtext.textContent = `Beolvasás: ${GEOJSON_FILE_PATH}...`;
-
-            fetch(GEOJSON_FILE_PATH)
+        // FETCH GEOJSON DATA
+        function fetchAndProcessGeoJSON() {
+            fetch('dulo_all_join_3857.geojson')
                 .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`Nem sikerült betölteni a fájlt: ${response.status} (${response.statusText})`);
-                    }
+                    if (!response.ok) throw new Error(`Hiba történt a fájl lekérésekor: ${response.status}`);
                     return response.json();
                 })
-                .then(parsedData => {
-                    if (parsedData.type !== "FeatureCollection" || !parsedData.features) {
-                        throw new Error("A betöltött fájl nem érvényes GeoJSON FeatureCollection formátumú!");
-                    }
-
-                    subtext.textContent = "Koordináták átszámítása (EOV -> WGS84)...";
-
-                    // Transzformáljuk a dűlő poligonokat valós GPS koordinátákká
-                    parsedData.features.forEach(feature => {
-                        if (feature.geometry && feature.geometry.coordinates) {
-                            feature.geometry.coordinates = transformCoords(
-                                feature.geometry.coordinates,
-                                feature.geometry.type
-                            );
-                        }
-                    });
-
-                    rawGeojson = parsedData;
-
-                    // Szűrők inicializálása és első renderelés
-                    initFilters();
-                    updateMapAndSidebar();
-
-                    // Loading overlay elrejtése animációval
-                    const overlay = document.getElementById('loading-overlay');
-                    overlay.classList.add('opacity-0');
-                    setTimeout(() => overlay.classList.add('hidden'), 300);
+                .then(data => {
+                    geojsonData = data;
+                    processGeoJSONFeatures(data.features);
+                    document.getElementById('map-loader').classList.add('hidden');
                 })
-                .catch(err => {
-                    subtext.innerHTML = `<span class="text-rose-450 font-semibold">Sikertelen betöltés</span>`;
-                    showToast(`Sikertelen betöltés: ${err.message}`);
-                    console.error("Hiba az adatok automatikus betöltésekor:", err);
+                .catch(error => {
+                    console.error("GeoJSON betöltési hiba:", error);
+                    alert("Nem sikerült betölteni a dulo_all_join_3857.geojson fájlt. Kérjük, győződjön meg róla, hogy a fájl az index.html mellett található!");
+                    document.getElementById('map-loader').innerHTML = `
+                        <div class="text-red-500 p-4">
+                            <i class="fa-solid fa-triangle-exclamation text-3xl mb-2 text-rose-500"></i>
+                            <h4 class="font-bold text-gray-200">Hiba az adatforrás elérésekor</h4>
+                            <p class="text-xs text-gray-400 mt-1">Nem található dulo_all_join_3857.geojson az index.html mellett.</p>
+                        </div>
+                    `;
                 });
         }
 
-        // --- 6. SZŰRŐK ÉS STATISZTIKÁK INICIALIZÁLÁSA ---
-        function initFilters() {
-            const borvidekek = new Set();
-            const telepulesek = new Set();
-
-            rawGeojson.features.forEach(f => {
-                const props = f.properties;
-                if (props.borvidekek) {
-                    borvidekek.add(props.borvidekek.trim());
-                }
-                if (props.telepulesek) {
-                    props.telepulesek.split(',').forEach(t => telepulesek.add(t.trim()));
-                }
-            });
-
-            // Borvidék select legördülő feltöltése
-            const bvSelect = document.getElementById('filter-borvidek');
-            bvSelect.innerHTML = '<option value="">Mindegyik borvidék</option>';
-            Array.from(borvidekek).sort().forEach(bv => {
-                const opt = document.createElement('option');
-                opt.value = bv;
-                opt.textContent = bv;
-                bvSelect.appendChild(opt);
-            });
-
-            // Település select legördülő feltöltése
-            const tSelect = document.getElementById('filter-telepules');
-            tSelect.innerHTML = '<option value="">Mindegyik település</option>';
-            Array.from(telepulesek).sort().forEach(t => {
-                const opt = document.createElement('option');
-                opt.value = t;
-                opt.textContent = t;
-                tSelect.appendChild(opt);
-            });
-
-            // Input eseménykezelők a szűrésekhez
-            document.getElementById('filter-borvidek').addEventListener('change', updateMapAndSidebar);
-            document.getElementById('filter-telepules').addEventListener('change', updateMapAndSidebar);
-            document.getElementById('search-dulo').addEventListener('input', updateMapAndSidebar);
+        function cleanString(str) {
+            if (!str) return '';
+            return str.toString().trim().toLowerCase()
+                .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         }
 
-        // --- 7. TÉRKÉP ÉS LISTA FRISSÍTÉSE ---
-        function updateMapAndSidebar() {
-            if (!rawGeojson) return;
+        // PROCESS GEOJSON FEATURES (Group all 1543 entries intelligently)
+        function processGeoJSONFeatures(features) {
+            compiledVineyards = [];
+            const grouped = {};
 
-            // Korábbi dűlőréteg letakarítása
-            if (duloGeojsonLayer) {
-                map.removeLayer(duloGeojsonLayer);
-            }
+            features.forEach((f, idx) => {
+                const prop = f.properties;
+                const name = (prop.nev || prop.NEV || prop.Name || 'Névtelen dűlő').trim();
+                const town = (prop.telepulesek || prop.telepules || 'Ismeretlen').trim();
+                const region = (prop.borvidekek || prop.borvidek || 'Ismeretlen borvidék').trim();
 
-            const activeBorvidek = document.getElementById('filter-borvidek').value;
-            const activeTelepules = document.getElementById('filter-telepules').value;
-            const searchKeyword = document.getElementById('search-dulo').value.toLowerCase().trim();
+                // Unique grouping key to combine multi-polygon dűlő structures correctly
+                const key = `${name} | ${town} | ${region}`;
 
-            // Kritériumok szerinti szűrés
-            const filteredFeatures = rawGeojson.features.filter(f => {
-                const props = f.properties;
-                
-                const matchesBorvidek = !activeBorvidek || 
-                    (props.borvidekek && props.borvidekek.includes(activeBorvidek));
-                
-                const matchesTelepules = !activeTelepules || 
-                    (props.telepulesek && props.telepulesek.includes(activeTelepules));
-                
-                const matchesSearch = !searchKeyword || 
-                    (props.nev && props.nev.toLowerCase().includes(searchKeyword)) ||
-                    (props.telepulesek && props.telepulesek.toLowerCase().includes(searchKeyword));
-
-                return matchesBorvidek && matchesTelepules && matchesSearch;
-            });
-
-            // Statisztikák összesítése
-            let totalArea = 0;
-            filteredFeatures.forEach(f => {
-                const area = parseFloat(f.properties.terulet_hektar);
-                if (!isNaN(area)) totalArea += area;
-            });
-
-            // Statisztikai panelek frissítése a felületen
-            document.getElementById('stat-count').textContent = filteredFeatures.length.toLocaleString('hu-HU');
-            document.getElementById('stat-area').innerHTML = `${totalArea.toLocaleString('hu-HU', {maximumFractionDigits: 1})} <span class="text-xs font-normal text-slate-400">ha</span>`;
-            document.getElementById('filtered-count-badge').textContent = `${filteredFeatures.length} db`;
-
-            // Új térképi réteg létrehozása és rajzolása a szűrt elemekkel
-            duloGeojsonLayer = L.geoJSON({
-                type: "FeatureCollection",
-                features: filteredFeatures
-            }, {
-                style: function(feature) {
-                    return {
-                        color: "#f59e0b",       // Borostyán határvonal
-                        weight: 1.5,
-                        fillColor: "#78350f",   // Meleg bor-szín kitöltés
-                        fillOpacity: 0.35
+                if (!grouped[key]) {
+                    grouped[key] = {
+                        name: name,
+                        town: town,
+                        region: region,
+                        properties: [],
+                        features: []
                     };
+                }
+
+                grouped[key].properties.push(prop);
+                grouped[key].features.push(f);
+            });
+
+            // Aggregate statistics and reproject geometries for each unique group
+            Object.entries(grouped).forEach(([key, group], index) => {
+                const aggregatedAttr = aggregateAttributes(group.properties, group.name, group.town, group.region);
+                const reprojectedGeoms = group.features.map(f => {
+                    return {
+                        type: "Feature",
+                        geometry: convertGeometryToWgs84(f.geometry),
+                        properties: { name: group.name, id: `v_${index}` }
+                    };
+                });
+
+                compiledVineyards.push({
+                    id: `v_${index}`,
+                    name: group.name,
+                    data: aggregatedAttr,
+                    geometries: {
+                        type: "FeatureCollection",
+                        features: reprojectedGeoms
+                    }
+                });
+            });
+
+            // Sort compiled vineyards alphabetically by name
+            compiledVineyards.sort((a, b) => a.name.localeCompare(b.name, 'hu'));
+
+            // Initial Filter Assignment
+            filteredVineyards = [...compiledVineyards];
+            
+            // Setup Map
+            initMap();
+            
+            // Build global GeoJSON collection to keep ALL polygons on the map at all times
+            const allFeatures = [];
+            compiledVineyards.forEach(v => {
+                v.geometries.features.forEach(f => {
+                    // Inject the unique compiled vineyard ID so we can match it back on click
+                    f.properties.id = v.id;
+                    allFeatures.push(f);
+                });
+            });
+            const globalGeoJSON = {
+                type: "FeatureCollection",
+                features: allFeatures
+            };
+
+            // Add global GeoJSON layer once with dynamic permanent tooltips (labels)
+            duloGeoLayer = L.geoJSON(globalGeoJSON, {
+                style: {
+                    color: '#be294e',      // Default subtle wine border
+                    weight: 1.2,
+                    fillColor: '#701a31',  // Subtle wine fill
+                    fillOpacity: 0.15
                 },
                 onEachFeature: function(feature, layer) {
-                    const props = feature.properties;
-                    
-                    // Elegáns egyedi Popup buborék tartalom
-                    const popupContent = `
-                        <div class="custom-popup p-2 text-slate-800">
-                            <h3 class="text-base font-bold text-amber-950 border-b border-amber-200/60 pb-1.5 mb-2 flex items-center gap-1.5">
-                                <i class="fa-solid fa-map-location-dot text-amber-600"></i>
-                                ${props.nev || 'Névtelen dűlő'}
-                            </h3>
-                            <div class="space-y-1 text-xs">
-                                <div class="flex justify-between gap-4">
-                                    <span class="text-slate-500 font-medium">Borvidék:</span>
-                                    <span class="font-semibold text-slate-900 text-right">${props.borvidekek || '-'}</span>
-                                </div>
-                                <div class="flex justify-between gap-4">
-                                    <span class="text-slate-500 font-medium">Település:</span>
-                                    <span class="font-semibold text-slate-900 text-right">${props.telepulesek || '-'}</span>
-                                </div>
-                                <div class="flex justify-between gap-4">
-                                    <span class="text-slate-500 font-medium">Terület:</span>
-                                    <span class="font-semibold text-amber-700 text-right">${props.terulet_hektar ? props.terulet_hektar + ' ha' : '-'}</span>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                    layer.bindPopup(popupContent, {
-                        className: 'custom-popup',
-                        closeButton: false,
-                        offset: L.point(0, -5)
+                    // Bind tooltip to act as a vector label
+                    layer.bindTooltip(feature.properties.name, {
+                        permanent: true,
+                        direction: 'center',
+                        className: 'dulo-label'
                     });
 
-                    // Réteg interakciók kezelése (hover effektek)
-                    layer.on({
-                        mouseover: function(e) {
-                            const l = e.target;
-                            l.setStyle({
-                                fillOpacity: 0.65,
-                                weight: 2.5,
-                                color: "#fbbf24"
-                            });
-                        },
-                        mouseout: function(e) {
-                            const l = e.target;
-                            if (L.stamp(l) !== selectedLayerId) {
-                                duloGeojsonLayer.resetStyle(l);
-                            }
-                        },
-                        click: function(e) {
-                            zoomToFeature(e.target);
-                        }
+                    layer.on('click', (e) => {
+                        L.DomEvent.stopPropagation(e); // Stop event bubble to map
+                        renderSelectedReport(feature.properties.id);
                     });
                 }
             }).addTo(map);
 
-            // Oldalsáv listájának generálása a szűrt találatok alapján
-            populateSidebarList(filteredFeatures);
-
-            // Térkép pozicionálása a szűrt geometriák befoglaló téglalapjára
-            if (filteredFeatures.length > 0 && duloGeojsonLayer) {
-                map.fitBounds(duloGeojsonLayer.getBounds(), {
-                    padding: [40, 40],
-                    maxZoom: 15,
-                    animate: true,
-                    duration: 1
-                });
+            // Populate Dropdown Menus and Side Panel list
+            populateFiltersAndResults();
+            
+            // Select first compiled dűlő as default view
+            if (filteredVineyards.length > 0) {
+                renderSelectedReport(filteredVineyards[0].id);
             }
         }
 
-        // --- 8. OLDALSÁV LISTA FELTÖLTÉSE ---
-        function populateSidebarList(features) {
-            const listContainer = document.getElementById('dulo-list');
-            listContainer.innerHTML = '';
+        // DYNAMIC FILTER AND RESULT PANEL BUILDER
+        function populateFiltersAndResults() {
+            const filterRegion = document.getElementById('filter-region');
+            const filterTown = document.getElementById('filter-town');
+            const filterName = document.getElementById('filter-name');
 
-            if (features.length === 0) {
-                listContainer.innerHTML = `
-                    <div class="p-6 text-center text-slate-500 text-xs">
-                        <i class="fa-solid fa-triangle-exclamation mb-1.5 text-sm text-slate-650"></i>
-                        <p>Nincs a keresésnek megfelelő dűlő.</p>
+            // Collect and sort unique regions
+            const uniqueRegions = [...new Set(compiledVineyards.map(v => v.data.borvidekek))].sort((a,b) => a.localeCompare(b,'hu'));
+
+            // Populate Borvidék Select
+            filterRegion.innerHTML = '<option value="ALL">Mindegyik borvidék</option>';
+            uniqueRegions.forEach(reg => {
+                const opt = document.createElement('option');
+                opt.value = reg;
+                opt.textContent = reg;
+                filterRegion.appendChild(opt);
+            });
+
+            // Interconnected filter listeners
+            filterRegion.addEventListener('change', () => applyInteractiveFilters(true, false));
+            filterTown.addEventListener('change', () => applyInteractiveFilters(false, false));
+            filterName.addEventListener('change', (e) => {
+                if (e.target.value !== 'ALL') {
+                    renderSelectedReport(e.target.value);
+                }
+            });
+
+            // Initial filter run to construct everything beautifully
+            applyInteractiveFilters(true, true);
+        }
+
+        // APPLY DETAILED THREE-LEVEL FILTERS
+        function applyInteractiveFilters(resetTowns = false, initial = false) {
+            const regionVal = document.getElementById('filter-region').value;
+            const townSelect = document.getElementById('filter-town');
+            const nameSelect = document.getElementById('filter-name');
+
+            // 1. Filter dataset by Region
+            let step1 = compiledVineyards;
+            if (regionVal !== 'ALL') {
+                step1 = compiledVineyards.filter(v => v.data.borvidekek === regionVal);
+            }
+
+            // 2. Re-populate Town Select (Splitting compound lists to single/unique towns)
+            if (resetTowns) {
+                const activeTownsSet = new Set();
+                step1.forEach(v => {
+                    if (v.data.telepulesek) {
+                        v.data.telepulesek.split(',').forEach(t => activeTownsSet.add(t.trim()));
+                    }
+                });
+                const activeTowns = [...activeTownsSet].sort((a,b) => a.localeCompare(b,'hu'));
+                
+                townSelect.innerHTML = '<option value="ALL">Mindegyik település</option>';
+                activeTowns.forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t;
+                    opt.textContent = t;
+                    townSelect.appendChild(opt);
+                });
+            }
+
+            const townVal = townSelect.value;
+
+            // 3. Filter by Town choice (using contains/includes for parsed individual names)
+            let step2 = step1;
+            if (townVal !== 'ALL') {
+                step2 = step1.filter(v => {
+                    if (!v.data.telepulesek) return false;
+                    const individualTowns = v.data.telepulesek.split(',').map(t => t.trim());
+                    return individualTowns.includes(townVal);
+                });
+            }
+
+            // Assign matching items
+            filteredVineyards = step2;
+
+            // 4. Update the Dűlő select box options dynamically
+            nameSelect.innerHTML = '<option value="ALL">Keresés a listából...</option>';
+            filteredVineyards.forEach(v => {
+                const opt = document.createElement('option');
+                opt.value = v.id;
+                opt.textContent = `${v.name} (${v.data.telepulesek})`;
+                if (v.id === currentSelectedId) {
+                    opt.selected = true;
+                }
+                nameSelect.appendChild(opt);
+            });
+
+            // Re-render Left Panel Results List and updates general KPIs
+            renderResultsList();
+
+            // Auto-select first matching dűlő if current choice is filtered out
+            if (!initial && filteredVineyards.length > 0) {
+                const currentStillValid = filteredVineyards.some(v => v.id === currentSelectedId);
+                if (!currentStillValid) {
+                    renderSelectedReport(filteredVineyards[0].id);
+                }
+            } else if (filteredVineyards.length === 0) {
+                // If nothing matches, clear selection
+                currentSelectedId = null;
+                document.getElementById('selection-placeholder').classList.remove('hidden');
+                document.getElementById('selection-content').classList.add('hidden');
+                updateMapOpacityAndSelection();
+            }
+        }
+
+        // RENDER SIDE PANEL LIST & CALC TOTALS
+        function renderResultsList() {
+            const listEl = document.getElementById('results-list');
+            const countEl = document.getElementById('results-count');
+            const kpiCount = document.getElementById('kpi-count');
+            const kpiArea = document.getElementById('kpi-area');
+            
+            listEl.innerHTML = '';
+            
+            // Calc sums dynamically for active filtered set
+            const countValue = filteredVineyards.length;
+            const areaValue = filteredVineyards.reduce((sum, v) => sum + parseFloat(v.data.totalArea), 0).toFixed(1);
+
+            countEl.textContent = `${countValue} db`;
+            kpiCount.textContent = `${countValue} db`;
+            kpiArea.textContent = `${areaValue} ha`;
+
+            if (filteredVineyards.length === 0) {
+                listEl.innerHTML = `
+                    <div class="p-4 text-center text-xs text-slate-500 italic">
+                        Nincs a kiválasztott szűrőknek megfelelő dűlő.
                     </div>
                 `;
                 return;
             }
 
-            features.forEach(f => {
-                const props = f.properties;
-                const duloName = props.nev || 'Névtelen dűlő';
-                const area = props.terulet_hektar ? `${props.terulet_hektar} ha` : '-';
-                
-                const itemBtn = document.createElement('button');
-                itemBtn.className = "w-full text-left p-3 hover:bg-slate-900/80 active:bg-slate-950 transition flex items-center justify-between group focus:outline-none border-b border-slate-950 last:border-0";
-                
-                itemBtn.innerHTML = `
-                    <div class="truncate pr-2">
-                        <div class="text-sm font-semibold text-slate-200 group-hover:text-amber-400 transition truncate">${duloName}</div>
-                        <div class="text-[10px] text-slate-500 truncate mt-0.5">
-                            <i class="fa-solid fa-map-pin mr-0.5 text-slate-600"></i> ${props.telepulesek || '-'}
-                        </div>
+            filteredVineyards.forEach(v => {
+                const isSelected = v.id === currentSelectedId;
+                const card = document.createElement('button');
+                card.type = "button";
+                card.className = `w-full text-left p-3 rounded-xl border text-xs transition duration-200 shadow-md flex flex-col gap-1.5 ${
+                    isSelected 
+                    ? 'border-wine-500 bg-wine-950/85 text-wine-100 font-semibold ring-1 ring-wine-600/50' 
+                    : 'border-slate-800 bg-slate-900/60 hover:bg-slate-800/80 text-gray-300'
+                }`;
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-start w-full">
+                        <strong class="font-serif text-sm truncate pr-2 ${isSelected ? 'text-amber-300' : 'text-gray-100'}">${v.name}</strong>
+                        <span class="bg-wine-900/60 text-wine-200 border border-wine-800/50 px-2 py-0.5 rounded text-[9px] font-bold shrink-0">${v.data.totalArea} ha</span>
                     </div>
-                    <span class="shrink-0 text-xs font-mono bg-slate-900 text-amber-500 border border-slate-800 px-1.5 py-0.5 rounded group-hover:border-amber-500/20 transition">${area}</span>
+                    <div class="text-[10px] text-gray-400 space-y-0.5">
+                        <p class="truncate"><i class="fa-solid fa-map text-wine-500/80"></i> ${v.data.borvidekek}</p>
+                        <p class="truncate"><i class="fa-solid fa-location-dot text-wine-500/80"></i> ${v.data.telepulesek}</p>
+                    </div>
                 `;
 
-                // Kattintásra a dűlő listaelem kijelöli a dűlőt a térképen is
-                itemBtn.addEventListener('click', () => {
-                    duloGeojsonLayer.eachLayer(layer => {
-                        if (layer.feature.properties.fid === props.fid || layer.feature.properties.nev === props.nev) {
-                            zoomToFeature(layer);
-                            layer.openPopup();
-                        }
-                    });
+                card.addEventListener('click', () => {
+                    renderSelectedReport(v.id);
                 });
 
-                listContainer.appendChild(itemBtn);
+                listEl.appendChild(card);
             });
         }
 
-        // Fókuszálás és kiemelés egy adott poligonra
-        function zoomToFeature(layer) {
-            // Előzőleg kijelölt dűlő stílusának visszaállítása
-            if (selectedLayerId && duloGeojsonLayer) {
-                const prevLayer = duloGeojsonLayer.getLayer(selectedLayerId);
-                if (prevLayer) {
-                    duloGeojsonLayer.resetStyle(prevLayer);
+        // CORE ATTRIBUTE AGGREGATION UTILITY
+        function aggregateAttributes(propertiesArray, name, town, region) {
+            const ids = propertiesArray.map(p => p.azonosito).join(', ');
+            const totalArea = propertiesArray.reduce((sum, p) => sum + parseFloat(p.terulet_hektar || p.terulet || 0), 0);
+
+            let minAlt = Infinity;
+            let maxAlt = -Infinity;
+            let sumAlt = 0;
+            let totalAltWeight = 0;
+
+            let minSlope = Infinity;
+            let maxSlope = -Infinity;
+            let sumSlope = 0;
+            let totalSlopeWeight = 0;
+
+            propertiesArray.forEach(p => {
+                const area = parseFloat(p.terulet_hektar || p.terulet || 1);
+                
+                // Elevation (Magasság)
+                const pMin = parseFloat(p.core_minimum_magassag || p.minimum_magassag || p.core_min_magassag);
+                const pMax = parseFloat(p.core_maximum_magassag || p.maximum_magassag || p.core_max_magassag);
+                const pAvg = parseFloat(p.core_magassag_atlag || p.magassag_atlag || p.core_avg_magassag);
+
+                if (!isNaN(pMin) && pMin < minAlt) minAlt = pMin;
+                if (!isNaN(pMax) && pMax > maxAlt) maxAlt = pMax;
+                if (!isNaN(pAvg)) {
+                    sumAlt += pAvg * area;
+                    totalAltWeight += area;
                 }
+
+                // Slope (Lejtőszög)
+                const pMinSlope = parseFloat(p.core_minimum_lejtoszog || p.minimum_lejtoszog || p.core_min_lejtoszog);
+                const pMaxSlope = parseFloat(p.core_maximum_lejtoszog || p.maximum_lejtoszog || p.core_max_lejtoszog);
+                const pAvgSlope = parseFloat(p.core_lejtoszog_atlag || p.lejtoszog_atlag || p.core_avg_lejtoszog);
+
+                if (!isNaN(pMinSlope) && pMinSlope < minSlope) minSlope = pMinSlope;
+                if (!isNaN(pMaxSlope) && pMaxSlope > maxSlope) maxSlope = pMaxSlope;
+                if (!isNaN(pAvgSlope)) {
+                    sumSlope += pAvgSlope * area;
+                    totalSlopeWeight += area;
+                }
+            });
+
+            const avgAlt = totalAltWeight > 0 ? (sumAlt / totalAltWeight) : null;
+            const avgSlope = totalSlopeWeight > 0 ? (sumSlope / totalSlopeWeight) : null;
+
+            // Aspect Mapping
+            const aspectKeys = [
+                { key: 'core_eszak_terulet_hektar', label: 'Észak' },
+                { key: 'core_eszakkelet_terulet_hektar', label: 'Északkelet' },
+                { key: 'core_kelet_terulet_hektar', label: 'Kelet' },
+                { key: 'core_delkelet_terulet_hektar', label: 'Délkelet' },
+                { key: 'core_del_terulet_hektar', label: 'Dél' },
+                { key: 'core_delnyugat_terulet_hektar', label: 'Délnyugat' },
+                { key: 'core_nyugat_terulet_hektar', label: 'Nyugat' },
+                { key: 'core_eszaknyugat_terulet_hektar', label: 'Északnyugat' },
+                { key: 'core_siksag_terulet_hektar', label: 'Síkság / Fennsík' },
+                { key: 'core_fennsik_terulet_hektar', label: 'Síkság / Fennsík' }
+            ];
+
+            const aspectData = {};
+            aspectKeys.forEach(item => { aspectData[item.label] = 0; });
+
+            propertiesArray.forEach(p => {
+                aspectKeys.forEach(item => {
+                    const val = parseFloat(p[item.key]);
+                    if (!isNaN(val)) {
+                        aspectData[item.label] += val;
+                    }
+                });
+            });
+
+            // Slope Mapping
+            const slopeMapping = [
+                { regex: /lejtoszog_0_5/i, label: '0-5° (Lapos/Enyhe)' },
+                { regex: /lejtoszog_5_10/i, label: '5-10° (Mérsékelt)' },
+                { regex: /lejtoszog_10_15/i, label: '10-15° (Közepes)' },
+                { regex: /lejtoszog_15_20/i, label: '15-20° (Meredek)' },
+                { regex: /lejtoszog_20_25/i, label: '20-25° (Nagyon meredek)' },
+                { regex: /lejtoszog_25_30/i, label: '25-30° (Rendkívül meredek)' },
+                { regex: /lejtoszog_30_35/i, label: '30-35° (Extrém meredek)' },
+                { regex: /lejtoszog_35_40/i, label: '35-40° (Szakadékos)' },
+                { regex: /lejtoszog_40_felett/i, label: '40° felett (Sziklafal)' }
+            ];
+
+            const slopeData = {};
+            slopeMapping.forEach(item => { slopeData[item.label] = 0; });
+
+            propertiesArray.forEach(p => {
+                Object.keys(p).forEach(col => {
+                    if (col.startsWith('core_')) {
+                        slopeMapping.forEach(item => {
+                            if (item.regex.test(col)) {
+                                const val = parseFloat(p[col]);
+                                if (!isNaN(val)) {
+                                    slopeData[item.label] += val;
+                                }
+                            }
+                        });
+                    }
+                });
+            });
+
+            // Elevation Zones
+            const elevationMapping = [
+                { regex: /magassag_.*?50_100/i, label: '50 - 100 m' },
+                { regex: /magassag_.*?100_150/i, label: '100 - 150 m' },
+                { regex: /magassag_.*?150_200/i, label: '150 - 200 m' },
+                { regex: /magassag_.*?200_250/i, label: '200 - 250 m' },
+                { regex: /magassag_.*?250_300/i, label: '250 - 300 m' },
+                { regex: /magassag_.*?300_350/i, label: '300 - 350 m' },
+                { regex: /magassag_.*?350_400/i, label: '350 - 400 m' },
+                { regex: /magassag_.*?400_450/i, label: '400 - 450 m' },
+                { regex: /magassag_.*?450_500/i, label: '450 - 500 m' },
+                { regex: /magassag_.*?500_felett/i, label: '500 m felett' }
+            ];
+
+            const elevationData = {};
+            elevationMapping.forEach(item => { elevationData[item.label] = 0; });
+
+            propertiesArray.forEach(p => {
+                Object.keys(p).forEach(col => {
+                    if (col.startsWith('core_')) {
+                        elevationMapping.forEach(item => {
+                            if (item.regex.test(col)) {
+                                const val = parseFloat(p[col]);
+                                if (!isNaN(val)) {
+                                    elevationData[item.label] += val;
+                                }
+                            }
+                        });
+                    }
+                });
+            });
+
+            return {
+                name,
+                ids,
+                borvidekek: region,
+                telepulesek: town,
+                totalArea: totalArea.toFixed(2),
+                minAlt: minAlt !== Infinity ? minAlt.toFixed(1) : 'N/A',
+                maxAlt: maxAlt !== -Infinity ? maxAlt.toFixed(1) : 'N/A',
+                avgAlt: avgAlt ? avgAlt.toFixed(1) : 'N/A',
+                minSlope: minSlope !== Infinity ? minSlope.toFixed(1) : 'N/A',
+                maxSlope: maxSlope !== -Infinity ? maxSlope.toFixed(1) : 'N/A',
+                avgSlope: avgSlope ? avgSlope.toFixed(1) : 'N/A',
+                aspectData,
+                slopeData,
+                elevationData
+            };
+        }
+
+        // RENDER DETAILS FOR CURRENT CHOSEN VINEYARD
+        function renderSelectedReport(id) {
+            currentSelectedId = id;
+            
+            // Highlight the active item in list
+            renderResultsList();
+
+            const currentObj = compiledVineyards.find(v => v.id === id);
+            if (!currentObj) return;
+
+            const item = currentObj.data;
+
+            // Sync with Dűlő selection dropdown value if it is available in the currently filtered list
+            const duloSelector = document.getElementById('filter-name');
+            const optionExists = Array.from(duloSelector.options).some(opt => opt.value === id);
+            if (optionExists) {
+                duloSelector.value = id;
+            } else {
+                duloSelector.value = 'ALL';
             }
 
-            selectedLayerId = L.stamp(layer);
-            
-            // Kijelölési stílus alkalmazása a fókuszált elemre
-            layer.setStyle({
-                weight: 3.5,
-                color: "#f59e0b",
-                fillColor: "#fbbf24",
-                fillOpacity: 0.7
-            });
+            // Remove placeholder and expose report grid
+            document.getElementById('selection-placeholder').classList.add('hidden');
+            document.getElementById('selection-content').classList.remove('hidden');
 
-            // Térkép ráközelítés
-            map.fitBounds(layer.getBounds(), {
-                padding: [50, 50],
-                maxZoom: 15,
-                animate: true,
-                duration: 0.8
+            // Set Header Specs
+            document.getElementById('rep-name').textContent = item.name;
+            document.getElementById('rep-region').textContent = item.borvidekek;
+            document.getElementById('rep-towns').textContent = item.telepulesek;
+            document.getElementById('rep-ids').textContent = item.ids;
+            document.getElementById('rep-area').textContent = item.totalArea;
+
+            // Core Elevation Indicators
+            document.getElementById('stat-min-alt').textContent = `${item.minAlt} m`;
+            document.getElementById('stat-max-alt').textContent = `${item.maxAlt} m`;
+            document.getElementById('stat-avg-alt').textContent = `${item.avgAlt} m`;
+
+            // Core Slope Indicators
+            document.getElementById('stat-min-slope').textContent = `${item.minSlope}°`;
+            document.getElementById('stat-max-slope').textContent = `${item.maxSlope}°`;
+            document.getElementById('stat-avg-slope').textContent = `${item.avgSlope}°`;
+
+            // Build Charts
+            createPieChart('chart-elevation', item.elevationData, 'ha', 'Magasság');
+            createPieChart('chart-slope', item.slopeData, 'ha', 'Lejtőszög');
+            createPieChart('chart-aspect', item.aspectData, 'ha', 'Kitettség');
+
+            // Redraw and style all map layers based on the current selection and filters
+            updateMapOpacityAndSelection();
+        }
+
+        // DYNAMIC LABELS (TOOLTIPS) VISIBILITY CONTROLLER
+        function updateTooltipVisibility() {
+            if (!map || !duloGeoLayer) return;
+            const currentZoom = map.getZoom();
+
+            duloGeoLayer.eachLayer(layer => {
+                const layerId = layer.feature.properties.id;
+                const isSelected = (layerId === currentSelectedId);
+                const isFiltered = filteredVineyards.some(v => v.id === layerId);
+
+                // Show label only if zoom level is high enough to fit them (>= 14)
+                // OR if it's the currently selected vineyard and zoom is at least medium (>= 12)
+                if (isFiltered && (currentZoom >= 14 || (isSelected && currentZoom >= 12))) {
+                    layer.openTooltip();
+                } else {
+                    layer.closeTooltip();
+                }
             });
         }
 
-        // Hibaértesítés megjelenítése
-        function showToast(message) {
-            const toast = document.getElementById('toast');
-            document.getElementById('toast-message').textContent = message;
-            toast.classList.remove('translate-y-24', 'opacity-0');
-            
-            setTimeout(() => {
-                toast.classList.add('translate-y-24', 'opacity-0');
-            }, 5000);
+        // UPDATE GEOPOLYGONS OPACITIES AND CENTER ZOOM ON SELECTION
+        function updateMapOpacityAndSelection() {
+            if (!map || !duloGeoLayer) return;
+
+            let selectedSublayers = [];
+
+            duloGeoLayer.eachLayer(layer => {
+                const layerId = layer.feature.properties.id;
+                const isFiltered = filteredVineyards.some(v => v.id === layerId);
+                const isSelected = (layerId === currentSelectedId);
+
+                if (isSelected) {
+                    // Highlight selected dűlő brightly (always, even if unfiltered!)
+                    layer.setStyle({
+                        stroke: true,
+                        color: '#fbbf24',       // Amber glow
+                        weight: 3.5,
+                        fill: true,
+                        fillColor: '#be294e',   // Wine core
+                        fillOpacity: 0.65
+                    });
+                    layer.bringToFront();
+                    selectedSublayers.push(layer);
+                } else if (isFiltered) {
+                    // Regular filtered dűlő style (kept visible but subtle wine)
+                    layer.setStyle({
+                        stroke: true,
+                        color: '#be294e',       // Wine outline
+                        weight: 1.2,
+                        fill: true,
+                        fillColor: '#701a31',   // Dark wine fill
+                        fillOpacity: 0.18
+                    });
+                } else {
+                    // Unfiltered dűlő - STILL visible but very faint so it can be clicked!
+                    layer.setStyle({
+                        stroke: true,
+                        color: '#334155',       // Faint gray outline
+                        weight: 0.8,
+                        fill: true,
+                        fillColor: '#1e293b',   // Faint fill
+                        fillOpacity: 0.05
+                    });
+                }
+            });
+
+            // Update visible labels on style update
+            updateTooltipVisibility();
+
+            // Zoom to highlighted sublayer if it exists
+            if (selectedSublayers.length > 0) {
+                const group = new L.FeatureGroup(selectedSublayers);
+                const bounds = group.getBounds();
+                if (bounds.isValid()) {
+                    map.fitBounds(bounds, {
+                        padding: [50, 50],
+                        maxZoom: 15,
+                        animate: true,
+                        duration: 0.8
+                    });
+                }
+            }
         }
+
+        // CUSTOM CHART BUILDER WITH DOCKING LEGENDS
+        function createPieChart(canvasId, dataObject, unit = 'ha', type = '') {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+
+            const labels = [];
+            const dataValues = [];
+            const backgroundColors = [];
+
+            // Aspect Circular Scale (GIS Standards)
+            const aspectColors = {
+                'Észak': '#ef4444',          // Red
+                'Északkelet': '#f97316',     // Orange
+                'Kelet': '#eab308',          // Yellow
+                'Délkelet': '#84cc16',       // Lime / Light Green
+                'Dél': '#10b981',            // Emerald / Teal
+                'Délnyugat': '#3b82f6',      // Blue
+                'Nyugat': '#6366f1',          // Indigo
+                'Északnyugat': '#ec4899',    // Pink/Magenta
+                'Síkság / Fennsík': '#64748b' // Cool Slate Gray
+            };
+
+            // Classic Sequential Scale for Slope (Warm Oranges)
+            const slopeColors = {
+                '0-5° (Lapos/Enyhe)': '#FEEDDE',
+                '5-10° (Mérsékelt)': '#FED6B2',
+                '10-15° (Közepes)': '#FDBE85',
+                '15-20° (Meredek)': '#FDA661',
+                '20-25° (Nagyon meredek)': '#FD8D3C',
+                '25-30° (Rendkívül meredek)': '#F27125',
+                '30-35° (Extrém meredek)': '#E6550D',
+                '35-40° (Szakadékos)': '#C64608',
+                '40° felett (Sziklafal)': '#A63603'
+            };
+
+            // Deep cool-blue sequential scale for Altitude
+            const elevationColors = {
+                '50 - 100 m': '#f0f9ff',
+                '100 - 150 m': '#e0f2fe',
+                '150 - 200 m': '#bae6fd',
+                '200 - 250 m': '#7dd3fc',
+                '250 - 300 m': '#38bdf8',
+                '300 - 350 m': '#0284c7',
+                '350 - 400 m': '#0369a1',
+                '400 - 450 m': '#075985',
+                '450 - 500 m': '#0c4a6e',
+                '500 m felett': '#0a2f4c'
+            };
+
+            const defaultPalette = ['#e11d48', '#be123c', '#9f1239', '#fb7185', '#fda4af'];
+
+            let colorPalette = defaultPalette;
+            if (type === 'Kitettség') colorPalette = aspectColors;
+            if (type === 'Lejtőszög') colorPalette = slopeColors;
+            if (type === 'Magasság') colorPalette = elevationColors;
+
+            let idx = 0;
+            Object.entries(dataObject).forEach(([label, value]) => {
+                if (value > 0.01) {
+                    labels.push(label);
+                    dataValues.push(parseFloat(value.toFixed(2)));
+                    
+                    if (Array.isArray(colorPalette)) {
+                        backgroundColors.push(colorPalette[idx % colorPalette.length]);
+                    } else {
+                        backgroundColors.push(colorPalette[label] || '#64748b');
+                    }
+                    idx++;
+                }
+            });
+
+            const total = dataValues.reduce((a, b) => a + b, 0);
+
+            // Populate custom premium HTML Legend under the chart container
+            const legendId = canvasId.replace('chart-', 'legend-');
+            const legendContainer = document.getElementById(legendId);
+            if (legendContainer) {
+                legendContainer.innerHTML = '';
+                labels.forEach((label, i) => {
+                    const val = dataValues[i];
+                    const pct = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
+                    const color = backgroundColors[i];
+                    
+                    const legendItem = document.createElement('div');
+                    legendItem.className = "flex items-center justify-between text-[11px] py-1 border-b border-slate-800/60 last:border-0";
+                    legendItem.innerHTML = `
+                        <span class="flex items-center gap-1.5 truncate pr-2">
+                            <span class="w-2.5 h-2.5 rounded-full shrink-0 border border-slate-700/80" style="background-color: ${color}"></span>
+                            <span class="truncate text-gray-300 font-medium">${label}</span>
+                        </span>
+                        <span class="shrink-0 text-gray-400 font-semibold text-right">
+                            ${val.toFixed(1)} ${unit} <span class="text-amber-400 font-bold ml-1">(${pct}%)</span>
+                        </span>
+                    `;
+                    legendContainer.appendChild(legendItem);
+                });
+            }
+
+            // Destroy former chart rendering
+            if (chartInstances[canvasId]) {
+                chartInstances[canvasId].destroy();
+            }
+
+            if (dataValues.length === 0) {
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = "#94a3b8";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.font = "11px sans-serif";
+                ctx.fillText("Nincs releváns adat", canvas.width / 2, canvas.height / 2);
+                return;
+            }
+
+            chartInstances[canvasId] = new Chart(canvas, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: dataValues,
+                        backgroundColor: backgroundColors,
+                        borderWidth: 1,
+                        borderColor: '#0f172a' // slate-950 borders inside the pie sections
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false 
+                        },
+                        tooltip: {
+                            backgroundColor: '#1e293b',
+                            titleColor: '#f8fafc',
+                            bodyColor: '#f1f5f9',
+                            borderColor: '#334155',
+                            borderWidth: 1,
+                            callbacks: {
+                                label: function(context) {
+                                    const val = context.raw;
+                                    const pct = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
+                                    return ` ${context.label}: ${val} ${unit} (${pct}%)`;
+                                }
+                            }
+                        }
+                    },
+                    cutout: '60%'
+                }
+            });
+        }
+
+        // PRINT EVENT HANDLERS TO ENSURE COMPACT & ACCURATE EXPORT EXTENTS
+        window.onbeforeprint = function() {
+            if (map && duloGeoLayer) {
+                // Ensure leaflet recalibrates viewport scale and dimensions
+                map.invalidateSize();
+
+                let selectedLayers = [];
+                duloGeoLayer.eachLayer(layer => {
+                    const layerId = layer.feature.properties.id;
+                    if (layerId === currentSelectedId) {
+                        selectedLayers.push(layer);
+                    }
+                });
+
+                // Force perfect map framing with tight padding (30px) on print render
+                if (selectedLayers.length > 0) {
+                    const group = new L.FeatureGroup(selectedLayers);
+                    const bounds = group.getBounds();
+                    if (bounds.isValid()) {
+                        map.fitBounds(bounds, {
+                            padding: [30, 30],
+                            animate: false
+                        });
+                    }
+                }
+            }
+        };
+
+        window.onafterprint = function() {
+            if (map && duloGeoLayer) {
+                map.invalidateSize();
+                updateMapOpacityAndSelection();
+            }
+        };
     </script>
 </body>
 </html>
