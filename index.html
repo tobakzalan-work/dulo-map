@@ -441,7 +441,7 @@
 
         // FETCH GEOJSON DATA
         function fetchAndProcessGeoJSON() {
-            fetch('dulo_all_join_3857.geojson')
+            fetch('dulo_all_join_3857_v2.geojson')
                 .then(response => {
                     if (!response.ok) throw new Error(`Hiba történt a fájl lekérésekor: ${response.status}`);
                     return response.json();
